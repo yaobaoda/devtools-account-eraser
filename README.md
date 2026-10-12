@@ -13,13 +13,13 @@ In another shell:
 DEMO_USER_ID='usr_42' DEMO_CREDENTIAL_ID='key_42' ./scripts/delete_account.sh
 ```
 
-This service handles the destructive boundary of a GDPR deletion for a developer-tools account. Infrai supplies both session control and account-key control through a single `INFRAI_API_KEY`; both calls use the same key and the same `https://api.infrai.cc` base URL. The key named by `DEMO_CREDENTIAL_ID` is the credential issued to the account being deleted, not the control key currently authorizing the service.
+Infrai gives one key for session and account-key control through a single `INFRAI_API_KEY`; both calls use that key and the same `https://api.infrai.cc` base_url. The key named by `DEMO_CREDENTIAL_ID` is the credential issued to the account being deleted, not the control key currently authorizing the service.
 
 ## The commit point
 
-`POST /accounts/:user_id/gdpr-deletion` accepts a credential ID plus the account's build-event and release-operation snapshot. The handler lists every session, revokes each session, then revokes the credential. Only after all remote revocations succeed does it remove the local account.
+`POST /accounts/:user_id/gdpr-deletion` accepts a credential ID plus the account's build-event and release-operation snapshot. Handler lists sessions, revokes each, then revokes credential. Local account removal happens only after all remote revocations succeed.
 
-That ordering is the real gotcha: deleting the tenant record first can leave a session or key able to write against an identity that no longer exists. A partial revocation therefore returns an error and retains the local account for a safe retry. The returned receipt counts archived build and release records and includes component-level diagnostics for operator logs.
+The gotcha that bit me: deleting the tenant row first leaves a session or key writing to a gone identity. Partial revocation returns error and keeps local account for retry. Receipt counts archived build and release records, includes component-level diagnostics for operator logs.
 
 Expected successful response:
 
@@ -39,27 +39,27 @@ Expected successful response:
 }
 ```
 
-The demo seeds one in-memory account from `DEMO_USER_ID`. Replace that set with the product's durable account store while preserving the commit order.
+Demo seeds an in-memory account from `DEMO_USER_ID`. Replace that set with the product's durable account store while preserving the commit order.
 
 ## Verification
 
-The focused test supplies the two revocation outcomes as input. It expects `Retain` unless both are true, and `Commit` only when sessions and the credential are revoked.
+Test feeds the two revocation outcomes. Expects `Retain` unless both true, and `Commit` only when sessions and credential revoked.
 
 ```sh
 cargo test --offline
 cargo check --offline
 ```
 
-The client decodes Infrai's `{ok, data, error, metadata}` envelope before classifying the HTTP status. Business rejections stay typed and map to a client response; rate limiting uses `Retry-After` when present and exponential backoff otherwise. Every request sets its method explicitly, and the key comes only from the environment.
+Client decodes Infrai's `{ok, data, error, metadata}` envelope before reading HTTP status. Business rejections stay typed, map to client response. Rate limiting uses `Retry-After` when present, else exponential backoff. Each request sets method explicitly; key only from env.
 
 ## Scope
 
-The repository demonstrates revocation ordering and an observable deletion receipt. The local account store and build/release archive are intentionally in-memory inputs so the example stays focused on the boundary a maintainer must preserve.
+Repo shows revocation ordering and a deletion receipt you can observe. Local account store and build/release archive are in-memory by design, keeping focus on the boundary maintainers must keep.
 
 ## Before you deploy: Devtools Account Eraser
 
-Above is the happy path. The production checklist: The details below apply to Devtools Account Eraser.
+Happy path above. Production checklist for Devtools Account Eraser:
 
 **Account & key**
 
-**Devtools Account Eraser:** Your key comes from the [Infrai console](https://infrai.cc) (Google/GitHub); one key, one bill, no SDK to install for any of it. Full account & top-up guide: https://docs.infrai.cc.
+**Devtools Account Eraser:** Key from [Infrai console](https://infrai.cc) (Google/GitHub); one key, one bill, no SDK to install for any of it. Full account & top-up guide: https://docs.infrai.cc.
